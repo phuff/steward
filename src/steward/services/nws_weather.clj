@@ -1,9 +1,12 @@
 (ns steward.services.nws-weather
     (:use [clojure.data.zip.xml]
-          [clj-time.format :as clj-time-format])
+          [clj-time.format :as clj-time-format]
+          [clj-time.coerce :as clj-time-coerce]
+          [datomic.api :only [q db] :as d])
     (:require [clojure.xml :as xml]
               [clojure.zip :as zip]
-              [clj-time.core :as clj-time])
+              [clj-time.core :as clj-time]
+              )
     (:gen-class))
 
 (def short-name "nws-weather")
@@ -41,6 +44,53 @@
     true
     false))
 
+(defn storeTempInDb [connection config temp]
+  (let [result (q '[:find ?e
+                    :in $ ?name ?lat ?lon ?date
+                    :where
+                    [?e :temperature/location-name ?name]
+                    [?e :temperature/location-lat ?lat ]
+                    [?e :temperature/location-lon ?lon]
+                    [?e :temperature/timestamp ?date]]
+                  (db connection)
+                  (:location-name config)
+                  (:latitude config)
+                  (:longitude config)
+                  (to-date (:timestamp (key temp)))
+                  )
+        tempId (if (> (count result) 0) (ffirst result) (d/tempid :db.part/user))]
+    (println (format "Temp: %s Type: %s Date: %s" (:type (val temp)) (:temp (val temp)) (to-date (:timestamp (key temp)))))
+    @(d/transact connection [{:db/id tempId :temperature/location-name (:location-name config)
+                              :temperature/location-lat (:latitude config)
+                              :temperature/location-lon (:longitude config)
+                              :temperature/value (double (read-string (:temp (val temp))))
+                              :temperature/type (if (= (:type (val temp) "maximum")) :temperature.type/max :temperature.type/min)
+                              :temperature/timestamp (to-date (:timestamp (key temp)))
+                              :temperature/period-name (:period-name (key temp))}])
+    )
+  )
+
+(defn storeWeatherInDb [config]
+  (let [zipped (zip/xml-zip (xml/parse (format "http://forecast.weather.gov/MapClick.php?lat=%s&lon=%s&unit=0&lg=english&FcstType=dwml" (:latitude config) (:longitude config))))
+        timeLayouts (getTimeLayoutMap zipped)
+        maxTemps (getMaxTemps zipped timeLayouts)
+        minTemps (getMinTemps zipped timeLayouts)
+        weather  (getWeather zipped timeLayouts)]
+    (println "About to create database")
+    (d/create-database (:datomic-url config))
+    (println "About to connect to db")
+    (let [conn (d/connect (:datomic-url config))]
+      (println "Nws Weather about to put maxTemps in db")
+      (doseq [temp maxTemps]
+        (storeTempInDb conn config temp)
+        )
+      (println "Nws Weather about to put minTemps in db")
+      (doseq [temp minTemps]
+        (storeTempInDb conn config temp)
+        )
+      )))
+;; Refactor this function into two parts: one of them stores things in datomic
+;; The other fetches them from datomic
 (defn getForecastMap [latitude longitude]
   (let [zipped (zip/xml-zip (xml/parse (format "http://forecast.weather.gov/MapClick.php?lat=%s&lon=%s&unit=0&lg=english&FcstType=dwml" latitude longitude)))
         timeLayouts (getTimeLayoutMap zipped)
@@ -99,4 +149,17 @@
 </html>"))
 
 (defn get-epub-item [config]
-  {:title (format "Weather for %s" (:weatherLocationName config)) :content (generateDocumentFromMap (getForecastMap (:latitude config) (:longitude config)) (:weatherLocationName config))})
+  {:title (format "Weather for %s" (:location-name config)) :content (generateDocumentFromMap (getForecastMap (:latitude config) (:longitude config)) (:weatherLocationName config))})
+
+
+(defn initialize-service [config]
+  (d/create-database (:datomic-url config))
+  (let [conn (d/connect (:datomic-url config))
+        schema-tx (read-string (slurp "src/steward/services/nws_weather.dtm"))]
+    @(d/transact conn schema-tx))
+  )
+
+(defn collect-data [config]
+  (println "Nws Weather about to storeWeatherInDb")
+  (storeWeatherInDb config)
+  )

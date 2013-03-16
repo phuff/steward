@@ -10,20 +10,17 @@
 (import 'org.apache.commons.mail.MultiPartEmail)
 (import 'org.apache.commons.mail.EmailAttachment)
 
-(defn getEpubItemFromService [service]
+(defn get-epub-item-from-service [service]
   (require (symbol (:libspec service)))
   (let [uuid (str (java.util.UUID/randomUUID))
         id (format "%s-%s" @(ns-resolve *ns* (symbol (:libspec service) "short-name")) uuid)]
     (assoc (@(ns-resolve *ns* (symbol (:libspec service) "get-epub-item")) (:config service))
       :id id :filename (format "%s.html" id))))
 
-(defn -main
-  "Main function"
-  [& args]
-  (let [config (clj-config/read-config "steward-config.clj")
-        volumeNumber (clj-time-format/unparse (clj-time-format/formatter-local "MMddYYYYHHmmssSSS") (clj-time-local/local-now))
+(defn generate-output [config]
+  (let [volumeNumber (clj-time-format/unparse (clj-time-format/formatter-local "MMddYYYYHHmmssSSS") (clj-time-local/local-now))
         outputPath (str (:outputPath config) volumeNumber)
-        items (map getEpubItemFromService (:services config))]
+        items (map get-epub-item-from-service (:services config))]
     (.mkdirs (io/file outputPath))
     (epub/output-epub outputPath
                       (format "Steward Volume %s" volumeNumber)
@@ -49,4 +46,43 @@
       )
     )
   nil
+  )
+
+
+
+
+
+(defn initialize-service [service]
+  (require (symbol (:libspec service)))
+  (@(ns-resolve *ns* (symbol (:libspec service) "initialize-service")) (:config service)))
+
+(defn collect-data-from-service [service]
+  (require (symbol (:libspec service)))
+  (@(ns-resolve *ns* (symbol (:libspec service) "collect-data")) (:config service)))
+
+(defn initialize-services [config]
+  (doseq [service (:services config)]
+    (initialize-service service)
+  ))
+
+(defn collect-data-from-services [config]
+  (doseq [service (:services config)]
+    (println "Collecting data")
+    (collect-data-from-service service)
+    )
+  )
+
+;; Parse command line args and run init on modules in config.
+;; Factor out epub generation into it's own thing
+;; Make it so that we can generate data for a service also
+(defn -main
+  "Main function"
+  [command]
+  (let [config (clj-config/read-config "steward-config.clj")]
+    (cond (= "output" command) (generate-output config)
+          (= "initialize" command) (initialize-services config)
+          (= "collect" command) (collect-data-from-services config)
+          :else (generate-output config)))
+  ; System/exit or else it hangs around for ever.
+  (System/exit 0)
   )

@@ -7,6 +7,7 @@
                  [org.clojure/data.zip "0.1.1"]
                  [clj-time "0.4.4"]
                  [clj-config "0.2.0"]
-                 [org.apache.commons/commons-email "1.2"]]
+                 [org.apache.commons/commons-email "1.2"]
+                 [com.datomic/datomic-free "0.8.3789"]]
   :repositories [["central-proxy" "http://repository.sonatype.org/content/repositories/central/"]]
   :main steward.core)

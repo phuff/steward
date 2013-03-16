@@ -1,0 +1,56 @@
+[
+ ;; Temperature predictions by date + location
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :temperature/location-name
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/fulltext true
+  :db/doc "Location's name"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :temperature/location-lat
+  :db/valueType :db.type/double
+  :db/cardinality :db.cardinality/one
+  :db/doc "Location's latitude"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :temperature/location-lon
+  :db/valueType :db.type/double
+  :db/cardinality :db.cardinality/one
+  :db/doc "Location's longitude"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :temperature/value
+  :db/valueType :db.type/double
+  :db/cardinality :db.cardinality/one
+  :db/doc "Location's longitude"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :temperature/timestamp
+  :db/valueType :db.type/instant
+  :db/cardinality :db.cardinality/one
+  :db/doc "Timestamp for the prediction"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :temperature/period-name
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/doc "The name of the timeperiod"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :temperature/type
+  :db/valueType :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/doc "Max or min (high or low)"
+  :db.install/_attribute :db.part/db}
+
+ [:db/add #db/id[:db.part/user] :db/ident :temperature.type/max]
+ [:db/add #db/id[:db.part/user] :db/ident :temperature.type/min]
+]
