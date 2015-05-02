@@ -42,8 +42,10 @@ class Steward:
                 epubSection = {'title': section['section-title'],
                                'chapters': []}
                 for module in section['modules']:
+                    #todo: don't make it append as a side effect, make it return the chapters
                     module.outputEpubDoc(self, epubSection['chapters'])
-                epubSections.append(epubSection)
+                if len(epubSection['chapters']) > 0:
+                    epubSections.append(epubSection)
 
         if self.getConfig('kindleOutput') or self.getConfig('epubOutput'):
             today = datetime.date.today().strftime("%Y-%m-%d")

@@ -1,7 +1,7 @@
 import base
 from datetime import datetime
 from sqlalchemy import *
-import re, dateutil.parser, urllib2, hashlib
+import re, dateutil.parser, urllib2, hashlib, htmlentitydefs
 import feedparser
 from HTMLParser import HTMLParser
 
@@ -12,7 +12,7 @@ class MLStripper(HTMLParser):
         self.reset()
         self.result = []
     def handle_data(self, d):
-        self.fed.append(d)
+        self.result.append(d)
     def handle_charref(self, number):
         codepoint = int(number[1:], 16) if number[0] in (u'x', u'X') else int(number)
         self.result.append(unichr(codepoint))
@@ -94,20 +94,24 @@ class OutputModule(base.OutputModule):
             updateQuery = rss_last_output_table.update().where(rss_last_output_table.c.id==self.config['id']).values(last_output=datetime.now())
             engine.execute(updateQuery)
 
-        # todo: loop over feeds here and output each one as a chapter
-        query = rss_table.select()
-        query = query.where(rss_table.c.date_retrieved > last_output)
-        query = query.where(rss_table.c.section_id == self.config['id'])
-        query = query.order_by(asc(rss_table.c.date_retrieved))
-        results = engine.execute(query)
-        output = u""
-        entries = []
-        for entry in results:
-            entries.append(entry)
-        i = 0
-        for entry in entries:
-            i += 1
-            border = u"<hr style='width: 100%;' />" if i < len(entries) else u""
-
-            output += u"<span style='font-size: small; font-style: italic;'>{0}</span><br /><span style='font-size: small; font-weight: bold;>{1}</span><br/><span style='font-size: small'>{2}</span>{3}".format(entry.feed_title, entry.title, strip_tags(entry.description), border)
-        chapters.append({'title': "RSS Feeds", 'body': output})
+        for feedUrl in self.config['feeds']:
+            query = rss_table.select()
+            query = query.where(rss_table.c.date_retrieved > last_output)
+            query = query.where(rss_table.c.section_id == self.config['id'])
+            query = query.where(rss_table.c.feed_url == feedUrl)
+            query = query.order_by(asc(rss_table.c.date_retrieved))
+            results = engine.execute(query)
+            output = u""
+            entries = []
+            feed_title = feedUrl
+            for entry in results:
+                entries.append(entry)
+                feed_title = entry.feed_title
+            i = 0
+            for entry in entries:
+                i += 1
+                border = u"<hr style='width: 100%;' />" if i < len(entries) else u""
+                output += u"<span style='font-size: small; font-style: italic;'>{0}</span><br /><span style='font-size: small; font-weight: bold;>{1}</span><br/><span style='font-size: small'>{2}</span>{3}".format(entry.feed_title, entry.title, strip_tags(entry.description), border)
+            if i > 0:
+                #only append a chapter if something new has happened
+                chapters.append({'title': feed_title, 'body': output})
