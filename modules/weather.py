@@ -1,5 +1,5 @@
 import base
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy import *
 from lxml import etree
 import re, dateutil.parser, urllib2
@@ -90,7 +90,7 @@ class OutputModule(base.OutputModule):
         query = query.where(weather_alias.c.id == None)
         query = query.where(weather_table.c.lat==self.config["lat"])
         query = query.where(weather_table.c.lon==self.config["lon"])
-        query = query.where(weather_table.c.forecast_date >= datetime.now())
+        query = query.where(weather_table.c.forecast_date >= datetime.now() - timedelta(hours=12))
         query = query.order_by(asc(weather_table.c.forecast_date))
         results = self.engine.execute(query)
         forecastPlace = self.config["place_name"]

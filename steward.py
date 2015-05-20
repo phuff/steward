@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import json, os.path, datetime, StringIO, smtplib
+import json, os.path, datetime, StringIO, smtplib, argparse
 from email.message import Message
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -29,50 +29,52 @@ class Steward:
                 module.setup(self)
 
 
-    def run(self):
+    def run(self, runInput=True, runOutput=True):
         self.loadModules()
         self.setupModules()
-        for key, modules in self.modules['input'].iteritems():
-            for module in modules:
-                module.input(self)
-        if self.getConfig('kindleOutput') or self.getConfig('epubOutput'):
-            epubSections = []
+        if runInput:
+            for key, modules in self.modules['input'].iteritems():
+                for module in modules:
+                    module.input(self)
+        if runOutput:
+            if self.getConfig('kindleOutput') or self.getConfig('epubOutput'):
+                epubSections = []
 
-            for section in self.modules['output']:
-                epubSection = {'title': section['section-title'],
-                               'chapters': []}
-                for module in section['modules']:
-                    #todo: don't make it append as a side effect, make it return the chapters
-                    module.outputEpubDoc(self, epubSection['chapters'])
-                if len(epubSection['chapters']) > 0:
-                    epubSections.append(epubSection)
+                for section in self.modules['output']:
+                    epubSection = {'title': section['section-title'],
+                                   'chapters': []}
+                    for module in section['modules']:
+                        #todo: don't make it append as a side effect, make it return the chapters
+                        module.outputEpubDoc(self, epubSection['chapters'])
+                    if len(epubSection['chapters']) > 0:
+                        epubSections.append(epubSection)
 
-        if self.getConfig('kindleOutput') or self.getConfig('epubOutput'):
-            today = datetime.date.today().strftime("%Y-%m-%d")
-            epubFilename = "/tmp/steward-%s.epub" % (today, )
-            mobiFilename = "/tmp/steward-%s.mobi" % (today, )
-            eb = EpubBuilder(epubFilename, "Steward for %s" % (datetime.date.today().strftime("%B %d, %Y")), "Information Steward", epubSections, True)
-            eb.writeBookFile()
-            if self.getConfig('kindleOutput'):
-                call(["/home/phuff/bin/kindlegen", epubFilename])
+            if self.getConfig('kindleOutput') or self.getConfig('epubOutput'):
+                today = datetime.date.today().strftime("%Y-%m-%d")
+                epubFilename = "/tmp/steward-%s.epub" % (today, )
+                mobiFilename = "/tmp/steward-%s.mobi" % (today, )
+                eb = EpubBuilder(epubFilename, "Steward for %s" % (datetime.date.today().strftime("%B %d, %Y")), "Information Steward", epubSections, True)
+                eb.writeBookFile()
+                if self.getConfig('kindleOutput'):
+                    call(["/home/phuff/bin/kindlegen", epubFilename])
 
-                message = MIMEMultipart()
-                message["Subject"] = ""
-                message['To']  = self.getConfig('kindleEmailAddress')
-                message['From'] = self.getConfig('senderEmailAddress')
-                fp = open(mobiFilename)
-                attachment = MIMEBase("application", "x-mobipocket-ebook")
-                attachment.set_payload(fp.read())
-                attachment.add_header('Content-Disposition', 'attachment', filename=os.path.basename(mobiFilename))
-                fp.close()
-                encoders.encode_base64(attachment)
-                message.attach(attachment)
-                server = smtplib.SMTP(self.getConfig('senderSMTPHost'))
-                server.ehlo()
-                server.starttls()
-                server.login(self.getConfig('senderEmailAddress'), self.getConfig('senderEmailPassword'))
-                server.sendmail(self.getConfig('senderEmailAddress'), self.getConfig('kindleEmailAddress'), message.as_string())
-                server.quit()
+                    message = MIMEMultipart()
+                    message["Subject"] = ""
+                    message['To']  = self.getConfig('kindleEmailAddress')
+                    message['From'] = self.getConfig('senderEmailAddress')
+                    fp = open(mobiFilename)
+                    attachment = MIMEBase("application", "x-mobipocket-ebook")
+                    attachment.set_payload(fp.read())
+                    attachment.add_header('Content-Disposition', 'attachment', filename=os.path.basename(mobiFilename))
+                    fp.close()
+                    encoders.encode_base64(attachment)
+                    message.attach(attachment)
+                    server = smtplib.SMTP(self.getConfig('senderSMTPHost'))
+                    server.ehlo()
+                    server.starttls()
+                    server.login(self.getConfig('senderEmailAddress'), self.getConfig('senderEmailPassword'))
+                    server.sendmail(self.getConfig('senderEmailAddress'), self.getConfig('kindleEmailAddress'), message.as_string())
+                    server.quit()
 
 
     def getModule(self, moduleType, moduleName):
@@ -116,5 +118,9 @@ class Steward:
 if __name__ == '__main__':
     f = open("config.json")
     config = json.load(f)
+    parser = argparse.ArgumentParser(description="Your personal information steward.")
+    parser.add_argument("--input", action="store_true")
+    parser.add_argument("--output", action="store_true")
+    args = parser.parse_args()
     s = Steward(config)
-    s.run()
+    s.run(args.input, args.output)
