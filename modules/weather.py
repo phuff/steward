@@ -1,6 +1,7 @@
 import base
 from datetime import datetime, timedelta
 from sqlalchemy import *
+from sqlalchemy import sql
 from lxml import etree
 import re, dateutil.parser, urllib2
 metadata = MetaData()
@@ -62,11 +63,12 @@ class InputModule(base.InputModule):
                 if timeLayout[i] in forecasts:
                     forecasts[timeLayout[i]]["forecast_text"] = texts[i].text
 
+        forecast_obtained = datetime.now()
         for key, forecast in forecasts.iteritems():
             engine.execute(weather_table.insert(), lat=forecast["lat"], lon=forecast["lon"],
                            place_name=forecast["place_name"], forecast_temp=forecast["forecast_temp"],
                            temperature_type=forecast["temperature_type"], forecast_text=forecast["forecast_text"],
-                           forecast_time_text=key[1], forecast_date=self.dateTimeFromString(key[0]))
+                           forecast_time_text=key[1], forecast_date=self.dateTimeFromString(key[0]), forecast_obtained=forecast_obtained)
 
 
     def parseTimeLayouts(self, forecastXml):
@@ -83,14 +85,10 @@ class OutputModule(base.OutputModule):
         self.engine = steward.getDbEngine()
 
     def outputEpubDoc(self, steward, chapters):
-        weather_alias = weather_table.alias()
-        from_obj = weather_table.outerjoin(weather_alias, and_(weather_table.c.place_name==weather_alias.c.place_name, weather_table.c.forecast_date==weather_alias.c.forecast_date, weather_table.c.forecast_obtained < weather_alias.c.forecast_obtained))
         query = weather_table.select()
-        query = query.select_from(from_obj)
-        query = query.where(weather_alias.c.id == None)
         query = query.where(weather_table.c.lat==self.config["lat"])
         query = query.where(weather_table.c.lon==self.config["lon"])
-        query = query.where(weather_table.c.forecast_date >= datetime.now() - timedelta(hours=12))
+        query = query.where(weather_table.c.forecast_obtained==select([sql.func.max(weather_table.c.forecast_obtained)],and_(weather_table.c.lat==self.config["lat"],weather_table.c.lon==self.config["lon"])).as_scalar())
         query = query.order_by(asc(weather_table.c.forecast_date))
         results = self.engine.execute(query)
         forecastPlace = self.config["place_name"]
